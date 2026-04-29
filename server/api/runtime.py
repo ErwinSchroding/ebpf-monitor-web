@@ -40,7 +40,7 @@ def init_db():
                 """
                 CREATE TABLE IF NOT EXISTS agent_registry (
                     agent_id TEXT PRIMARY KEY,
-                    host_id TEXT NOT NULL,
+                    host_id TEXT,
                     hostname TEXT NOT NULL,
                     version TEXT NOT NULL,
                     host_external_ip TEXT,
@@ -101,6 +101,9 @@ def init_db():
                 CREATE INDEX IF NOT EXISTS idx_agent_heartbeats_agent_id ON agent_heartbeats(agent_id);
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(agent_registry)").fetchall()}
+            if "host_id" not in columns:
+                connection.execute("ALTER TABLE agent_registry ADD COLUMN host_id TEXT")
 
 
 def json_bytes(payload):

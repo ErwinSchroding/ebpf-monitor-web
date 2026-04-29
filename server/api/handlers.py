@@ -183,7 +183,7 @@ class AppHandler(BaseHTTPRequestHandler):
 
     def handle_agent_register(self, body):
         try:
-            require_fields(body, ["agent_id", "host_id", "hostname", "version"])
+            require_fields(body, ["agent_id", "hostname", "host_ip", "version"])
         except ValueError as exc:
             self.respond_json(400, {"error": str(exc)})
             return
@@ -191,14 +191,14 @@ class AppHandler(BaseHTTPRequestHandler):
         agent_id = str(body["agent_id"])
         record = {
             "agent_id": agent_id,
-            "host_id": str(body["host_id"]),
+            "host_id": str(body.get("host_id") or body["agent_id"]),
             "hostname": str(body["hostname"]),
             "version": str(body["version"]),
             "registered_at": now_iso(),
             "last_seen_at": now_iso(),
             "healthy": 1,
             "queue_depth": 0,
-            "host_external_ip": body.get("host_external_ip", ""),
+            "host_external_ip": str(body["host_ip"]),
         }
         with get_db_connection() as connection:
             connection.execute(
@@ -226,11 +226,11 @@ class AppHandler(BaseHTTPRequestHandler):
                     record["queue_depth"],
                 ),
             )
-        self.respond_json(201, {"ok": True, "agent": record})
+        self.respond_json(200, {"ok": True})
 
     def handle_agent_heartbeat(self, body):
         try:
-            require_fields(body, ["agent_id", "timestamp_ns", "healthy", "queue_depth"])
+            require_fields(body, ["agent_id", "timestamp_ns", "host_ip", "healthy", "queue_depth"])
         except ValueError as exc:
             self.respond_json(400, {"error": str(exc)})
             return
@@ -267,8 +267,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 ),
             )
             connection.execute(
-                "UPDATE agent_registry SET last_seen_at = ?, healthy = ?, queue_depth = ? WHERE agent_id = ?",
-                (heartbeat["received_at"], heartbeat["healthy"], queue_depth, agent_id),
+                "UPDATE agent_registry SET last_seen_at = ?, healthy = ?, queue_depth = ?, host_external_ip = ? WHERE agent_id = ?",
+                (heartbeat["received_at"], heartbeat["healthy"], queue_depth, str(body["host_ip"]), agent_id),
             )
         self.respond_json(200, {"ok": True})
 
@@ -333,11 +333,19 @@ class AppHandler(BaseHTTPRequestHandler):
                     "pid": int(event["pid"]),
                     "comm": str(event["comm"]),
                     "cgroup_id": event.get("cgroup_id"),
-                    "src_ip": event.get("src_ip"),
-                    "src_port": event.get("src_port"),
-                    "dst_ip": event.get("dst_ip"),
-                    "dst_port": event.get("dst_port"),
-                    "extra_json": json_bytes(event.get("extra", {})).decode("utf-8") if event.get("extra") is not None else None,
+                    "src_ip": event.get("src_ip") or event.get("local_ip"),
+                    "src_port": event.get("src_port") or event.get("local_port"),
+                    "dst_ip": event.get("dst_ip") or event.get("remote_ip"),
+                    "dst_port": event.get("dst_port") or event.get("remote_port"),
+                    "extra_json": json_bytes({
+                        "tid": event.get("tid"),
+                        "uid": event.get("uid"),
+                        "local_ip": event.get("local_ip"),
+                        "local_port": event.get("local_port"),
+                        "remote_ip": event.get("remote_ip"),
+                        "remote_port": event.get("remote_port"),
+                        **(event.get("extra") or {}),
+                    }).decode("utf-8"),
                 }
                 normalized_events.append(normalized)
 
