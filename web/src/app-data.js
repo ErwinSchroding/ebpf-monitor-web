@@ -24,3 +24,12 @@ export const fallbackData = {
     { time: '2026-04-17 15:55:08', actor: 'researcher', action: 'Updated rule action', target: 'udp-fixed-length-lab', summary: 'Changed action from SAMPLE_ONLY to DROP for a controlled replay.' }
   ]
 };
+
+export async function fetchJson(baseUrl, path) {
+  const response = await fetch(`${baseUrl}${path}`);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || `Request failed: ${response.status}`);
+  }
+  return body;
+}

@@ -1,22 +1,57 @@
 import React from 'react';
 
 export default function DashboardPage({ data }) {
+  const agents = data.agents || [];
+  const events = data.events || [];
+  const heartbeats = data.heartbeats || [];
+  const overview = data.overview || {};
+
   return (
     <>
       <section className="hero">
-        <p className="eyebrow">Overview</p>
-        <h3 className="section-title">Observability, UDP sender, and SSH demo in one React app</h3>
-        <p>The frontend is now fully React-based while preserving the current telemetry dashboard and message sender behavior.</p>
+        <p className="eyebrow">Agent Overview</p>
+        <h3 className="section-title">Server-driven observability console</h3>
+        <p>Now the dashboard reflects live agent registration, heartbeat activity, and batched event ingest from the backend.</p>
       </section>
+
       <div className="metrics">
-        <article className="metric-card"><p className="label">Events in 24h</p><p className="value">{data.overview.events24h}</p></article>
-        <article className="metric-card"><p className="label">Active rules</p><p className="value">{data.overview.activeRules}</p></article>
-        <article className="metric-card"><p className="label">Unique sources</p><p className="value">{data.overview.uniqueSources}</p></article>
-        <article className="metric-card"><p className="label">Drop ratio</p><p className="value">{data.overview.dropRatio}</p></article>
+        <article className="metric-card"><p className="label">Agents</p><p className="value">{agents.length}</p></article>
+        <article className="metric-card"><p className="label">Events</p><p className="value">{events.length}</p></article>
+        <article className="metric-card"><p className="label">Heartbeats</p><p className="value">{heartbeats.length}</p></article>
+        <article className="metric-card"><p className="label">Active rules</p><p className="value">{overview.activeRules ?? '—'}</p></article>
       </div>
+
       <div className="grid-2">
-        <section className="panel"><p className="eyebrow">Activity Curve</p><h3 className="section-title">Detection timeline</h3><div className="mini-bars">{data.trend.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div className="bar" style={{ width: `${Math.max(item.value * 2, 8)}px` }} /><strong>{item.value}</strong></div>)}</div></section>
-        <section className="panel"><p className="eyebrow">Matched Rules</p><h3 className="section-title">Top profiles</h3><div className="stack">{data.topRules.map((rule) => <div className="rule-card" key={rule.name}><div className="split"><strong>{rule.name}</strong><span className="badge sample">{rule.hits} hits</span></div></div>)}</div></section>
+        <section className="panel">
+          <p className="eyebrow">Agents</p>
+          <h3 className="section-title">Registered agents</h3>
+          <div className="stack">
+            {agents.length === 0 ? <p className="muted">No agents have registered yet.</p> : agents.map((agent) => (
+              <article className="rule-card" key={agent.agent_id}>
+                <div className="split"><strong>{agent.hostname}</strong><span className="badge sample">{agent.agent_id}</span></div>
+                <p className="muted">Host ID: {agent.host_id}</p>
+                <p className="muted">Version: {agent.version}</p>
+                <p className="muted">Healthy: {String(Boolean(agent.healthy))} · Queue: {agent.queue_depth}</p>
+                <p className="muted">Last seen: {agent.last_seen_at}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <p className="eyebrow">Heartbeat stream</p>
+          <h3 className="section-title">Recent heartbeats</h3>
+          <div className="stack">
+            {heartbeats.length === 0 ? <p className="muted">No heartbeat records yet.</p> : heartbeats.slice(0, 5).map((item) => (
+              <article className="rule-card" key={item.id}>
+                <div className="split"><strong>{item.agent_id}</strong><span className="badge sample">{item.healthy ? 'healthy' : 'unhealthy'}</span></div>
+                <p className="muted">Queue depth: {item.queue_depth}</p>
+                <p className="muted">Timestamp(ns): {item.timestamp_ns}</p>
+                <p className="muted">Received: {item.received_at}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     </>
   );

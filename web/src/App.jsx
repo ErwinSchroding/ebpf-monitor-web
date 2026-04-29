@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import io from 'socket.io-client';
-import { fallbackData } from './app-data.js';
+import { fallbackData, fetchJson } from './app-data.js';
 import DashboardPage from './pages/DashboardPage.jsx';
 import UdpSenderPage from './pages/UdpSenderPage.jsx';
 import SshPage from './pages/SshPage.jsx';
-import { EventsPage, RulesPage, AuditPage } from './pages/ListPage.jsx';
+import { AgentsPage, EventsPage, RulesPage, AuditPage } from './pages/ListPage.jsx';
 
 function useLocalStorageFlag(key, defaultValue) {
   const [value, setValue] = useState(() => localStorage.getItem(key) ?? defaultValue);
@@ -15,8 +15,11 @@ function useLocalStorageFlag(key, defaultValue) {
 }
 
 export default function App() {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
   const [view, setView] = useState('dashboard');
   const [data, setData] = useState(fallbackData);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [sender, setSender] = useState({ targetHost: '127.0.0.1', targetPort: '5000', password: 'messages_client', message: 'temp=23.4|time=2026-04-24T12:30:00Z|host=lab01' });
   const [sendResult, setSendResult] = useState('');
   const [sshForm, setSshForm] = useState({ host: '', port: '22', username: '', password: '' });
@@ -30,8 +33,35 @@ export default function App() {
   const fitRef = useRef(null);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8080/demo-data').then((r) => (r.ok ? r.json() : Promise.reject())).then(setData).catch(() => setData(fallbackData));
-  }, []);
+    let mounted = true;
+    Promise.all([
+      fetchJson(apiBaseUrl, '/api/agents'),
+      fetchJson(apiBaseUrl, '/api/events'),
+      fetchJson(apiBaseUrl, '/health').catch(() => ({ status: 'unknown' })),
+      fetchJson(apiBaseUrl, '/demo-data').catch(() => fallbackData),
+    ])
+      .then(([agents, events, health, demoData]) => {
+        if (!mounted) return;
+        setData({
+          ...demoData,
+          agents: agents.items || [],
+          events: events.items || [],
+          heartbeats: demoData.heartbeats || [],
+          health,
+        });
+        setLoadError('');
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setLoadError(error.message || 'Failed to load backend data');
+        setData(fallbackData);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     if (useMagicPassword === 'true' && magicPassword) setSshForm((prev) => ({ ...prev, password: magicPassword }));
@@ -52,7 +82,7 @@ export default function App() {
     setSendResult('Sending...');
     try {
       const params = new URLSearchParams({ targetHost: sender.targetHost, targetPort: sender.targetPort, message: sender.message, client: sender.password });
-      const response = await fetch(`http://127.0.0.1:8080/udp/temperature?${params.toString()}`);
+      const response = await fetch(`${apiBaseUrl}/udp/temperature?${params.toString()}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'send failed');
       setSendResult(`Sent successfully. Payload length: ${body.payloadLength} bytes.`);
@@ -122,16 +152,17 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><p className="eyebrow">Research Console</p><h1>Trigger Observatory</h1></div>
-        <nav className="nav">{nav('dashboard', 'Dashboard')}{nav('sender', 'UDP Sender')}{nav('ssh', 'Web SSH')}{nav('events', 'Events')}{nav('rules', 'Rules')}{nav('audit', 'Audit')}</nav>
+        <nav className="nav">{nav('dashboard', 'Dashboard')}{nav('agents', 'Agents')}{nav('sender', 'UDP Sender')}{nav('ssh', 'Web SSH')}{nav('events', 'Events')}{nav('rules', 'Rules')}{nav('audit', 'Audit')}</nav>
         <div className="sidebar-note"><p>Lab profile</p><strong>Merged React workspace</strong></div>
       </aside>
       <main className="main">
         <header className="topbar">
-          <div><p className="eyebrow">Safe eBPF/XDP Research Platform</p><h2>{view === 'ssh' ? 'Web SSH' : view === 'sender' ? 'UDP Sender' : view.charAt(0).toUpperCase() + view.slice(1)}</h2></div>
-          <div className="status-pill"><span className="status-dot" />Sample dataset loaded</div>
+          <div><p className="eyebrow">Safe eBPF/XDP Research Platform</p><h2>{view === 'ssh' ? 'Web SSH' : view === 'sender' ? 'UDP Sender' : view === 'agents' ? 'Agents' : view.charAt(0).toUpperCase() + view.slice(1)}</h2></div>
+          <div className="status-pill"><span className="status-dot" />{loading ? 'Loading backend data...' : loadError ? `Fallback data in use: ${loadError}` : 'Backend connected'}</div>
         </header>
 
         {view === 'dashboard' && <DashboardPage data={data} />}
+        {view === 'agents' && <AgentsPage data={data} />}
         {view === 'sender' && <UdpSenderPage sender={sender} setSender={setSender} payload={payload} encodedLength={encodedLength} sendResult={sendResult} onSubmit={sendUdp} />}
         {view === 'ssh' && <SshPage sshForm={sshForm} setSshForm={setSshForm} sshConnected={sshConnected} sshStatus={sshStatus} terminalContainerRef={terminalContainerRef} connectSsh={connectSsh} disconnectSsh={disconnectSsh} useMagicPassword={useMagicPassword} setUseMagicPassword={setUseMagicPassword} magicPassword={magicPassword} setMagicPassword={setMagicPassword} />}
         {view === 'events' && <EventsPage data={data} />}
