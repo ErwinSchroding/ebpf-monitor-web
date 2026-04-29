@@ -146,6 +146,13 @@ export default function App() {
     setSshConnected(false);
   };
 
+  const openUdpSenderForAgent = (agent) => {
+    if (!agent?.host_external_ip) return;
+    setSender((prev) => ({ ...prev, targetHost: agent.host_external_ip }));
+    setSendResult(`Target host set from agent ${agent.agent_id}.`);
+    setView('sender');
+  };
+
   const nav = (id, label) => <button className={`nav-link${view === id ? ' active' : ''}`} onClick={() => setView(id)}>{label}</button>;
 
   return (
@@ -162,7 +169,7 @@ export default function App() {
         </header>
 
         {view === 'dashboard' && <DashboardPage data={data} />}
-        {view === 'agents' && <AgentsPage data={data} />}
+        {view === 'agents' && <AgentsPage data={data} onOpenUdpSender={openUdpSenderForAgent} />}
         {view === 'sender' && <UdpSenderPage sender={sender} setSender={setSender} payload={payload} encodedLength={encodedLength} sendResult={sendResult} onSubmit={sendUdp} />}
         {view === 'ssh' && <SshPage sshForm={sshForm} setSshForm={setSshForm} sshConnected={sshConnected} sshStatus={sshStatus} terminalContainerRef={terminalContainerRef} connectSsh={connectSsh} disconnectSsh={disconnectSsh} useMagicPassword={useMagicPassword} setUseMagicPassword={setUseMagicPassword} magicPassword={magicPassword} setMagicPassword={setMagicPassword} />}
         {view === 'events' && <EventsPage data={data} />}

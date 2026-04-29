@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatBeijingTime } from '../time.js';
 
 export default function DashboardPage({ data }) {
   const agents = data.agents || [];
@@ -32,7 +33,7 @@ export default function DashboardPage({ data }) {
                 <p className="muted">Host ID: {agent.host_id}</p>
                 <p className="muted">Version: {agent.version}</p>
                 <p className="muted">Healthy: {String(Boolean(agent.healthy))} · Queue: {agent.queue_depth}</p>
-                <p className="muted">Last seen: {agent.last_seen_at}</p>
+                <p className="muted">Last seen: {formatBeijingTime(agent.last_seen_at)}</p>
               </article>
             ))}
           </div>
@@ -46,8 +47,8 @@ export default function DashboardPage({ data }) {
               <article className="rule-card" key={item.id}>
                 <div className="split"><strong>{item.agent_id}</strong><span className="badge sample">{item.healthy ? 'healthy' : 'unhealthy'}</span></div>
                 <p className="muted">Queue depth: {item.queue_depth}</p>
-                <p className="muted">Timestamp(ns): {item.timestamp_ns}</p>
-                <p className="muted">Received: {item.received_at}</p>
+                <p className="muted">Timestamp(ns): {formatBeijingTime(item.timestamp_ns)}</p>
+                <p className="muted">Received: {formatBeijingTime(item.received_at)}</p>
               </article>
             ))}
           </div>

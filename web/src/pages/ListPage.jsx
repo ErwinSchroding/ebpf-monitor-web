@@ -1,5 +1,6 @@
 import React from 'react';
 import Badge from '../components/Badge.jsx';
+import { formatBeijingTime } from '../time.js';
 
 function formatEndpoint(ip, port) {
   if (!ip) return '—';
@@ -25,7 +26,7 @@ function getEventEndpoints(event) {
   };
 }
 
-export function AgentsPage({ data }) {
+export function AgentsPage({ data, onOpenUdpSender }) {
   const agents = data.agents || [];
   return (
     <section className="panel">
@@ -42,11 +43,11 @@ export function AgentsPage({ data }) {
               </div>
               <Badge action={agent.healthy ? 'PASS' : 'DROP'}>{agent.healthy ? 'healthy' : 'unhealthy'}</Badge>
             </div>
-            <p className="muted">Host ID: {agent.host_id}</p>
             <p className="muted">Version: {agent.version}</p>
             <p className="muted">External IP: {agent.host_external_ip || '—'}</p>
-            <p className="muted">Queue depth: {agent.queue_depth}</p>
-            <p className="muted">Last seen: {agent.last_seen_at}</p>
+            <p className="muted">First registered: {formatBeijingTime(agent.registered_at)}</p>
+            <p className="muted">Last heartbeat: {formatBeijingTime(agent.last_seen_at)}</p>
+            <button className="secondary-button" type="button" disabled={!agent.host_external_ip} onClick={() => onOpenUdpSender?.(agent)}>UDP sender</button>
           </article>
         ))}
       </div>
@@ -111,7 +112,7 @@ export function EventsPage({ data }) {
             const endpoints = getEventEndpoints(event);
             return (
               <tr key={event.id}>
-                <td>{event.received_at || event.timestamp_ns}</td>
+                <td>{formatBeijingTime(event.received_at || event.timestamp_ns)}</td>
                 <td>{event.agent_id}</td>
                 <td>{event.direction}</td>
                 <td>{event.protocol}</td>

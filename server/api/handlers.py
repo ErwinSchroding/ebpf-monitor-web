@@ -239,18 +239,15 @@ class AppHandler(BaseHTTPRequestHandler):
             "host_external_ip": str(body["host_ip"]),
         }
         with get_db_connection() as connection:
+            existing = connection.execute("SELECT agent_id FROM agent_registry WHERE agent_id = ?", (agent_id,)).fetchone()
+            if existing:
+                self.respond_json(200, {"ok": True})
+                return
+
             connection.execute(
                 """
                 INSERT INTO agent_registry (agent_id, host_id, hostname, version, host_external_ip, registered_at, last_seen_at, healthy, queue_depth)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(agent_id) DO UPDATE SET
-                    host_id = excluded.host_id,
-                    hostname = excluded.hostname,
-                    version = excluded.version,
-                    host_external_ip = excluded.host_external_ip,
-                    last_seen_at = excluded.last_seen_at,
-                    healthy = excluded.healthy,
-                    queue_depth = excluded.queue_depth
                 """,
                 (
                     record["agent_id"],
