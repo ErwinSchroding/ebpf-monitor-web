@@ -128,10 +128,3 @@ export function EventsPage({ data }) {
   );
 }
 
-export function RulesPage({ data }) {
-  return <section className="panel"><p className="eyebrow">Rule Management</p><h3 className="section-title">Profiles and response policy</h3><div className="stack">{(data.rules || []).map((rule) => <article className="rule-card" key={rule.name}><div className="split"><div><strong>{rule.name}</strong><p className="muted">{rule.match}</p></div><Badge action={rule.action}>{rule.action}</Badge></div><p>{rule.note}</p><p className="muted">Status: {rule.status}</p></article>)}</div></section>;
-}
-
-export function AuditPage({ data }) {
-  return <section className="panel"><p className="eyebrow">Audit Trail</p><h3 className="section-title">Administrative history</h3><div className="stack">{(data.audit || []).map((item) => <article className="audit-card" key={`${item.time}-${item.action}`}><div className="split"><strong>{item.action}</strong><span className="muted">{item.time}</span></div><p>{item.summary}</p><p className="muted">{item.actor} on {item.target}</p></article>)}</div></section>;
-}

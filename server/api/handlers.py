@@ -132,6 +132,14 @@ class AppHandler(BaseHTTPRequestHandler):
                 self.respond_json(200, agent)
             return
 
+        if parsed.path == "/api/heartbeats":
+            with get_db_connection() as connection:
+                rows = connection.execute(
+                    "SELECT id, agent_id, timestamp_ns, healthy, queue_depth, received_at FROM agent_heartbeats ORDER BY received_at DESC"
+                ).fetchall()
+            self.respond_json(200, {"items": [self._row_to_heartbeat(row) for row in rows]})
+            return
+
         if parsed.path == "/api/events":
             with get_db_connection() as connection:
                 rows = connection.execute(
@@ -430,6 +438,11 @@ class AppHandler(BaseHTTPRequestHandler):
         payload["healthy"] = bool(payload.get("healthy"))
         payload["last_sequence"] = int(payload.get("last_sequence") or 0)
         payload["next_sequence"] = payload["last_sequence"] + 1
+        return payload
+
+    def _row_to_heartbeat(self, row):
+        payload = dict(row)
+        payload["healthy"] = bool(payload.get("healthy"))
         return payload
 
     def _decode_agent_event_row(self, row):

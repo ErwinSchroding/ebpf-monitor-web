@@ -32,7 +32,7 @@ export default function DashboardPage({ data }) {
                 <div className="split"><strong>{agent.hostname}</strong><span className="badge sample">{agent.agent_id}</span></div>
                 <p className="muted">Host ID: {agent.host_id}</p>
                 <p className="muted">Version: {agent.version}</p>
-                <p className="muted">Healthy: {String(Boolean(agent.healthy))} · Queue: {agent.queue_depth}</p>
+                <p className="muted">Healthy: {String(Boolean(agent.healthy))}</p>
                 <p className="muted">Last seen: {formatBeijingTime(agent.last_seen_at)}</p>
               </article>
             ))}

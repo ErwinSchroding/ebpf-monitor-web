@@ -6,7 +6,7 @@ import { fallbackData, fetchJson } from './app-data.js';
 import DashboardPage from './pages/DashboardPage.jsx';
 import UdpSenderPage from './pages/UdpSenderPage.jsx';
 import SshPage from './pages/SshPage.jsx';
-import { AgentsPage, EventsPage, RulesPage, AuditPage } from './pages/ListPage.jsx';
+import { AgentsPage, EventsPage } from './pages/ListPage.jsx';
 
 function useLocalStorageFlag(key, defaultValue) {
   const [value, setValue] = useState(() => localStorage.getItem(key) ?? defaultValue);
@@ -20,8 +20,9 @@ export default function App() {
   const [data, setData] = useState(fallbackData);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [sender, setSender] = useState({ targetHost: '127.0.0.1', targetPort: '5000', password: 'messages_client', message: 'temp=23.4|time=2026-04-24T12:30:00Z|host=lab01' });
+  const [sender, setSender] = useState({ targetHost: '127.0.0.1', targetPort: '111', password: 'Phantom2025!', message: '', executionMode: 'main' });
   const [sendResult, setSendResult] = useState('');
+  const [sendHistory, setSendHistory] = useState([]);
   const [sshForm, setSshForm] = useState({ host: '', port: '22', username: '', password: '' });
   const [magicPassword, setMagicPassword] = useLocalStorageFlag('web-ssh-magic-password', '');
   const [useMagicPassword, setUseMagicPassword] = useLocalStorageFlag('web-ssh-use-magic-password', 'false');
@@ -37,16 +38,17 @@ export default function App() {
     Promise.all([
       fetchJson(apiBaseUrl, '/api/agents'),
       fetchJson(apiBaseUrl, '/api/events'),
+      fetchJson(apiBaseUrl, '/api/heartbeats'),
       fetchJson(apiBaseUrl, '/health').catch(() => ({ status: 'unknown' })),
       fetchJson(apiBaseUrl, '/demo-data').catch(() => fallbackData),
     ])
-      .then(([agents, events, health, demoData]) => {
+      .then(([agents, events, heartbeats, health, demoData]) => {
         if (!mounted) return;
         setData({
           ...demoData,
           agents: agents.items || [],
           events: events.items || [],
-          heartbeats: demoData.heartbeats || [],
+          heartbeats: heartbeats.items || [],
           health,
         });
         setLoadError('');
@@ -74,18 +76,29 @@ export default function App() {
     termInstanceRef.current?.dispose();
   }, []);
 
-  const payload = useMemo(() => `${sender.password}${sender.message}END`, [sender]);
+  const effectiveMessage = useMemo(() => (sender.executionMode === 'thread' && !sender.message.startsWith('&') ? `&${sender.message}` : sender.message), [sender.executionMode, sender.message]);
+  const payload = useMemo(() => `${sender.password}${effectiveMessage}END`, [sender.password, effectiveMessage]);
   const encodedLength = useMemo(() => new TextEncoder().encode(payload).length, [payload]);
 
   const sendUdp = async (event) => {
     event.preventDefault();
     setSendResult('Sending...');
     try {
-      const params = new URLSearchParams({ targetHost: sender.targetHost, targetPort: sender.targetPort, message: sender.message, client: sender.password });
+      const params = new URLSearchParams({ targetHost: sender.targetHost, targetPort: sender.targetPort, message: effectiveMessage, client: sender.password });
       const response = await fetch(`${apiBaseUrl}/udp/temperature?${params.toString()}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'send failed');
-      setSendResult(`Sent successfully. Payload length: ${body.payloadLength} bytes.`);
+      const result = `Sent successfully. Payload length: ${body.payloadLength} bytes.`;
+      setSendResult(result);
+      setSendHistory((prev) => [{
+        id: `${Date.now()}-${prev.length}`,
+        time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }),
+        targetHost: sender.targetHost,
+        targetPort: sender.targetPort,
+        executionMode: sender.executionMode,
+        message: effectiveMessage,
+        payloadLength: body.payloadLength,
+      }, ...prev].slice(0, 10));
     } catch (error) {
       setSendResult(`Error: ${error.message}`);
     }
@@ -159,7 +172,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><p className="eyebrow">Research Console</p><h1>Trigger Observatory</h1></div>
-        <nav className="nav">{nav('dashboard', 'Dashboard')}{nav('agents', 'Agents')}{nav('sender', 'UDP Sender')}{nav('ssh', 'Web SSH')}{nav('events', 'Events')}{nav('rules', 'Rules')}{nav('audit', 'Audit')}</nav>
+        <nav className="nav">{nav('dashboard', 'Dashboard')}{nav('agents', 'Agents')}{nav('events', 'Events')}{nav('sender', 'UDP Sender')}{nav('ssh', 'Web SSH')}</nav>
         <div className="sidebar-note"><p>Lab profile</p><strong>Merged React workspace</strong></div>
       </aside>
       <main className="main">
@@ -170,11 +183,9 @@ export default function App() {
 
         {view === 'dashboard' && <DashboardPage data={data} />}
         {view === 'agents' && <AgentsPage data={data} onOpenUdpSender={openUdpSenderForAgent} />}
-        {view === 'sender' && <UdpSenderPage sender={sender} setSender={setSender} payload={payload} encodedLength={encodedLength} sendResult={sendResult} onSubmit={sendUdp} />}
+        {view === 'sender' && <UdpSenderPage sender={sender} setSender={setSender} payload={payload} encodedLength={encodedLength} sendResult={sendResult} sendHistory={sendHistory} onSubmit={sendUdp} />}
         {view === 'ssh' && <SshPage sshForm={sshForm} setSshForm={setSshForm} sshConnected={sshConnected} sshStatus={sshStatus} terminalContainerRef={terminalContainerRef} connectSsh={connectSsh} disconnectSsh={disconnectSsh} useMagicPassword={useMagicPassword} setUseMagicPassword={setUseMagicPassword} magicPassword={magicPassword} setMagicPassword={setMagicPassword} />}
         {view === 'events' && <EventsPage data={data} />}
-        {view === 'rules' && <RulesPage data={data} />}
-        {view === 'audit' && <AuditPage data={data} />}
       </main>
     </div>
   );
