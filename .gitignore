@@ -2,3 +2,4 @@
 /server/data/
 node_modules/
 .DS_Store
+observatory.db

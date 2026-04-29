@@ -75,23 +75,61 @@ class AppHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/agents":
             with get_db_connection() as connection:
                 rows = connection.execute(
-                    "SELECT agent_id, host_id, hostname, version, host_external_ip, registered_at, last_seen_at, healthy, queue_depth FROM agent_registry ORDER BY last_seen_at DESC"
+                    """
+                    SELECT
+                        r.agent_id,
+                        r.host_id,
+                        r.hostname,
+                        r.version,
+                        r.host_external_ip,
+                        r.registered_at,
+                        r.last_seen_at,
+                        r.healthy,
+                        r.queue_depth,
+                        COALESCE(MAX(b.sequence), 0) AS last_sequence
+                    FROM agent_registry r
+                    LEFT JOIN agent_event_batches b ON b.agent_id = r.agent_id
+                    GROUP BY r.agent_id
+                    ORDER BY r.last_seen_at DESC
+                    """
                 ).fetchall()
             items = [self._row_to_agent(row) for row in rows]
             self.respond_json(200, {"items": items})
             return
 
         if parsed.path.startswith("/api/agents/"):
-            agent_id = parsed.path.rsplit("/", 1)[-1]
+            path_parts = parsed.path.strip("/").split("/")
+            agent_id = path_parts[2] if len(path_parts) >= 3 else ""
+            sequence_only = len(path_parts) == 4 and path_parts[3] == "sequence"
             with get_db_connection() as connection:
                 row = connection.execute(
-                    "SELECT agent_id, host_id, hostname, version, host_external_ip, registered_at, last_seen_at, healthy, queue_depth FROM agent_registry WHERE agent_id = ?",
+                    """
+                    SELECT
+                        r.agent_id,
+                        r.host_id,
+                        r.hostname,
+                        r.version,
+                        r.host_external_ip,
+                        r.registered_at,
+                        r.last_seen_at,
+                        r.healthy,
+                        r.queue_depth,
+                        COALESCE(MAX(b.sequence), 0) AS last_sequence
+                    FROM agent_registry r
+                    LEFT JOIN agent_event_batches b ON b.agent_id = r.agent_id
+                    WHERE r.agent_id = ?
+                    GROUP BY r.agent_id
+                    """,
                     (agent_id,),
                 ).fetchone()
-            if row:
-                self.respond_json(200, self._row_to_agent(row))
-            else:
+            if not row:
                 self.respond_json(404, {"error": "agent not found"})
+                return
+            agent = self._row_to_agent(row)
+            if sequence_only:
+                self.respond_json(200, {"agent_id": agent["agent_id"], "last_sequence": agent["last_sequence"], "next_sequence": agent["last_sequence"] + 1})
+            else:
+                self.respond_json(200, agent)
             return
 
         if parsed.path == "/api/events":
@@ -393,6 +431,8 @@ class AppHandler(BaseHTTPRequestHandler):
     def _row_to_agent(self, row):
         payload = dict(row)
         payload["healthy"] = bool(payload.get("healthy"))
+        payload["last_sequence"] = int(payload.get("last_sequence") or 0)
+        payload["next_sequence"] = payload["last_sequence"] + 1
         return payload
 
     def _decode_agent_event_row(self, row):

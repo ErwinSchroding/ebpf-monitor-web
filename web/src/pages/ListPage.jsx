@@ -6,6 +6,25 @@ function formatEndpoint(ip, port) {
   return port ? `${ip}:${port}` : ip;
 }
 
+function getEventEndpoints(event) {
+  const localIp = event.local_ip || event.src_ip;
+  const localPort = event.local_port || event.src_port;
+  const remoteIp = event.remote_ip || event.dst_ip;
+  const remotePort = event.remote_port || event.dst_port;
+
+  if (String(event.direction).toLowerCase() === 'inbound') {
+    return {
+      source: formatEndpoint(remoteIp, remotePort),
+      destination: formatEndpoint(localIp, localPort),
+    };
+  }
+
+  return {
+    source: formatEndpoint(localIp, localPort),
+    destination: formatEndpoint(remoteIp, remotePort),
+  };
+}
+
 export function AgentsPage({ data }) {
   const agents = data.agents || [];
   return (
@@ -38,14 +57,14 @@ export function AgentsPage({ data }) {
 export function EventsPage({ data }) {
   const events = data.events || [];
   const agentOptions = [...new Set(events.map((event) => event.agent_id).filter(Boolean))];
-  const typeOptions = [...new Set(events.map((event) => event.event_type).filter(Boolean))];
+  const directionOptions = [...new Set(events.map((event) => event.direction).filter(Boolean))];
   const [agentFilter, setAgentFilter] = React.useState('all');
-  const [typeFilter, setTypeFilter] = React.useState('all');
+  const [directionFilter, setDirectionFilter] = React.useState('all');
 
   const filteredEvents = events.filter((event) => {
     const agentMatch = agentFilter === 'all' || event.agent_id === agentFilter;
-    const typeMatch = typeFilter === 'all' || event.event_type === typeFilter;
-    return agentMatch && typeMatch;
+    const directionMatch = directionFilter === 'all' || event.direction === directionFilter;
+    return agentMatch && directionMatch;
   });
 
   return (
@@ -64,10 +83,10 @@ export function EventsPage({ data }) {
             </select>
           </label>
           <label className="filter-field">
-            <span>Event type</span>
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-              <option value="all">All types</option>
-              {typeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+            <span>Direction</span>
+            <select value={directionFilter} onChange={(e) => setDirectionFilter(e.target.value)}>
+              <option value="all">All directions</option>
+              {directionOptions.map((direction) => <option key={direction} value={direction}>{direction}</option>)}
             </select>
           </label>
         </div>
@@ -81,26 +100,27 @@ export function EventsPage({ data }) {
             <th>Direction</th>
             <th>Protocol</th>
             <th>PID/Comm</th>
-            <th>Src</th>
-            <th>Dst</th>
-            <th>Type</th>
+            <th>Source</th>
+            <th>Destination</th>
           </tr>
         </thead>
         <tbody>
           {filteredEvents.length === 0 ? (
-            <tr><td colSpan="8" className="muted">No matching event data available.</td></tr>
-          ) : filteredEvents.map((event) => (
-            <tr key={event.id}>
-              <td>{event.received_at || event.timestamp_ns}</td>
-              <td>{event.agent_id}</td>
-              <td>{event.direction}</td>
-              <td>{event.protocol}</td>
-              <td>{event.pid} / {event.comm}</td>
-              <td>{formatEndpoint(event.src_ip, event.src_port)}</td>
-              <td>{formatEndpoint(event.dst_ip, event.dst_port)}</td>
-              <td><Badge action={event.event_type}>{event.event_type}</Badge></td>
-            </tr>
-          ))}
+            <tr><td colSpan="7" className="muted">No matching event data available.</td></tr>
+          ) : filteredEvents.map((event) => {
+            const endpoints = getEventEndpoints(event);
+            return (
+              <tr key={event.id}>
+                <td>{event.received_at || event.timestamp_ns}</td>
+                <td>{event.agent_id}</td>
+                <td>{event.direction}</td>
+                <td>{event.protocol}</td>
+                <td>{event.pid} / {event.comm}</td>
+                <td>{endpoints.source}</td>
+                <td>{endpoints.destination}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </section>
